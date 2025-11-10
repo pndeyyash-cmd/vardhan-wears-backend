@@ -29,14 +29,11 @@ mongoose.connect(process.env.MONGO_URI, {
 
 
 // --- MODEL PRE-REGISTRATION (THE FIX) ---
-// This forces Mongoose to be aware of all models
-// before any routes are defined, fixing the .populate() hanging bug.
 require('./models/User');
 require('./models/Category');
 require('./models/Product');
 require('./models/Order');
-require('./models/Cart'); // <-- ADDED: Pre-register the new Cart model
-// --- END FIX ---
+require('./models/Cart');
 
 
 // Import routes (Now safe to import *after* models are registered)
@@ -44,13 +41,42 @@ const productRoutes = require('./routes/productRoutes');
 const authRoutes = require('./routes/authRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const orderRoutes = require('./routes/orderRoutes'); 
-const cartRoutes = require('./routes/cartRoutes'); // <-- ADDED: Import cart routes
+const cartRoutes = require('./routes/cartRoutes');
 
 // Initialize the Express app
 const app = express();
 
+// ===================================================================
+// === DEPLOYMENT FIX 1: CONFIGURE CORS FOR PRODUCTION ===
+// ===================================================================
+// We must explicitly list the URLs that are allowed to make requests.
+const allowedOrigins = [
+    'http://127.0.0.1:5500', // Your local dev server
+    'http://localhost:5500',
+    'http://127.0.0.1:5001', // Your current local server
+    'http://localhost:5001',
+    'https://vardhan-wears.netlify.app' // Placeholder for our future frontend
+];
+
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
+    credentials: true,
+    optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+// =================== END OF FIX 1 ===================
+
 // Middleware
-app.use(cors());
 app.use(express.json());
 
 // --- API Routes ---
@@ -59,18 +85,20 @@ app.use('/api/products', productRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/orders', orderRoutes);
-app.use('/api/cart', cartRoutes); // <-- ADDED: Use the new cart routes
+app.use('/api/cart', cartRoutes);
 
 
-// === SERVE STATIC FILES (Your Frontend) ===
-// This tells Express to serve your root folder
-const staticPath = path.join(__dirname, '../');
-app.use(express.static(staticPath));
+// ===================================================================
+// === DEPLOYMENT FIX 2: REMOVE STATIC FILE SERVING ===
+// ===================================================================
+// This backend is an API. It should NOT serve the frontend.
+// The frontend will be deployed separately (e.g., to Netlify).
+// These lines have been removed:
+// const staticPath = path.join(__dirname, '../');
+// app.use(express.static(staticPath));
+// =================== END OF FIX 2 ===================
 
-// ** THE INCORRECT CATCH-ALL ROUTE HAS BEEN REMOVED **
-// app.use(express.static) is now correctly handling all file serving.
-// A request for /admin.html will serve admin.html
-// A request for /profile.html will serve profile.html
 
 // Define the port the server will listen on
+// This is correct for Render.
 const PORT = process.env.PORT || 5001;
