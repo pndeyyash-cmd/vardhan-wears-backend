@@ -1,23 +1,57 @@
 const express = require("express")
 const router = express.Router()
 const Product = require("../models/Product")
+const Category = require("../models/Category") // <-- 1. IMPORT CATEGORY MODEL
 const { protect, admin } = require("../middleware/authMiddleware")
 
 /**
  * @route   GET /api/products
- * @desc    Get all products (or filter by category)
+ * @desc    Get all products (or filter by category & subcategory)
  * @access  Public
  */
+// ===================================================================
+// === START OF FIX: This entire route is replaced ===
+// ===================================================================
 router.get("/", async (req, res) => {
   try {
-    const filter = {}
-    if (req.query.category) {
-      filter.category = req.query.category
+    const { category: parentCategory, subcategory } = req.query
+
+    // This is the filter that will be applied to the Product collection
+    const productFilter = {}
+
+    // This is the filter to find the categories first
+    const categoryFilter = {}
+
+    if (parentCategory) {
+      categoryFilter.parentCategory = parentCategory
     }
-    
-    // This route automatically works with the new model, as it just fetches all.
-    // The .populate() is also unchanged.
-    const products = await Product.find(filter).populate("category", "name")
+
+    if (subcategory) {
+      categoryFilter.name = subcategory // The subcategory is the 'name' field
+    }
+
+    // If either filter is present, we must first find the category IDs
+    if (parentCategory || subcategory) {
+      // Find all categories that match the filter (e.g., parent="Kids" AND name="Boys Kurtas")
+      const categories = await Category.find(categoryFilter).select('_id')
+      
+      if (categories.length === 0) {
+        // No categories matched, so no products will match.
+        return res.json([])
+      }
+      
+      // Get an array of just the IDs
+      const categoryIds = categories.map(c => c._id)
+      
+      // Set the product filter to find products where the 'category' field
+      // is one of the IDs in our array.
+      productFilter.category = { $in: categoryIds }
+    }
+
+    // Find the products using the built filter (which is either {} or { category: { $in: [...] } })
+    // We populate 'parentCategory' so the admin table can display it.
+    const products = await Product.find(productFilter)
+        .populate("category", "name parentCategory") // <-- 2. POPULATE PARENT CATEGORY
 
     res.json(products)
   } catch (error) {
@@ -25,6 +59,10 @@ router.get("/", async (req, res) => {
     res.status(500).json({ message: "Server error" })
   }
 })
+// ===================================================================
+// === END OF FIX ===
+// ===================================================================
+
 
 /**
  * @route   GET /api/products/:id
@@ -34,7 +72,9 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     // This route is also unchanged and works with the new model.
-    const product = await Product.findById(req.params.id).populate("category", "name")
+    const product = await Product.findById(req.params.id)
+        .populate("category", "name parentCategory") // <-- 3. (Optional but good) POPULATE PARENT HERE TOO
+    
     if (product) {
       res.json(product)
     } else {
@@ -140,11 +180,5 @@ router.delete("/:id", protect, admin, async (req, res) => {
     res.status(500).json({ message: "Server error" })
   }
 })
-
-//
-// **DELETED**: The old `POST /api/products/validate-stock` route has been
-// removed. Its logic was based on the V2 model and is now 100% wrong.
-// We will build its replacement in the next phase, inside `orderRoutes.js`.
-//
 
 module.exports = router
