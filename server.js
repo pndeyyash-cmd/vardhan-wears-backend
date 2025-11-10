@@ -55,7 +55,7 @@ const allowedOrigins = [
     'http://localhost:5500',
     'http://127.0.0.1:5001', // Your current local server
     'http://localhost:5001',
-    'https://vardhan-wears.netlify.app' // Placeholder for our future frontend
+    'https://vardhan-wears.vercel.app' // <-- YOUR LIVE VERCEL URL
 ];
 
 const corsOptions = {
@@ -92,10 +92,7 @@ app.use('/api/cart', cartRoutes);
 // === DEPLOYMENT FIX 2: REMOVE STATIC FILE SERVING ===
 // ===================================================================
 // This backend is an API. It should NOT serve the frontend.
-// The frontend will be deployed separately (e.g., to Netlify).
-// These lines have been removed:
-// const staticPath = path.join(__dirname, '../');
-// app.use(express.static(staticPath));
+// The frontend will be deployed separately.
 // =================== END OF FIX 2 ===================
 
 
